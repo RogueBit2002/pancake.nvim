@@ -2,36 +2,37 @@
 	description = "Nix native Neovim package manager 'Pancake'";
 
 	inputs = { };
-	outputs = { self, nixpkgs, ... }: {
-		makeNeovimPackage = { pkgs, luaConfig, label, binary ? pkgs.neovim + /bin/nvim, plugins ? [], nativeDependencies ? [] }: let
-		
-			prefix = "pancake_nvim-${label}";
+	outputs = { self, ... }: {
+		lib.make = {
+			pkgs,
+			label ? null,
+			neovim ? pkgs.neovim,
+			plugins ? [],
+			environment ? [],
+			config ? null
+		}: let
+			bootloader = pkgs.writeText "bootloader.lua" ''
+${ if plugins == null || builtins.length plugins == 0 then "" else plugins
+|> builtins.map (p: "vim.opt.runtimepath:prepend \"${p}\"")
+|> builtins.foldl' (lines: line: "${lines}${line}\n") ""
+}
 
-			loader = pkgs.writeTextFile {
-				name = "${prefix}-loader.lua";
-				text = ''
--- Add plugins to RTP
-${builtins.foldl' (lines: p: "${lines}vim.opt.runtimepath:prepend(\"${p}\")\n") "" plugins }
-
--- Load config
-dofile("${luaConfig}")
-				'';
-			};
-
-			wrapper = pkgs.writeShellScript "${prefix}-wrapper" ''
-export PATH=${builtins.foldl' (acc: path: "${acc}:${path}/bin") "$PATH" nativeDependencies}
-exec ${binary} --clean --cmd source${loader} "$@"
+${ if config == null then "" else ''
+vim.opt.runtimepath:prepend "${ builtins.dirOf config }"
+dofile "${ config }"
+'' }
 			'';
-		in pkgs.stdenv.mkDerivation {
-			name = prefix;
 
-			src = null;
-			dontUnpack = true;
-
-			installPhase = ''
-				mkdir -p $out/bin
-				ln -s ${wrapper} $out/bin/nvim
-			'';
+		in pkgs.symlinkJoin {
+			name = "pancake" + (if label != null then "+${label}" else "");
+			paths = [ pkgs.neovim ];
+			nativeBuildInputs = [ pkgs.makeWrapper ];
+			postBuild = ''
+wrapProgram $out/bin/nvim \
+--add-flag --clean \
+--add-flag --cmd --add-flag source${bootloader} \
+${ if environment == null || builtins.length plugins == 0 then "" else "--set PATH ${ pkgs.lib.makeBinPath environment }" }
+'';
 		};
 	};
 }
