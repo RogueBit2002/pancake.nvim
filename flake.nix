@@ -31,7 +31,7 @@ dofile "${ config }"
 wrapProgram $out/bin/nvim \
 --add-flag --clean \
 --add-flag --cmd --add-flag source${bootloader} \
-${ if environment == null || builtins.length plugins == 0 then "" else "--set PATH ${ pkgs.lib.makeBinPath environment }" }
+${ if environment == null || builtins.length plugins == 0 then "" else "--prefix PATH \"\" ${ pkgs.lib.makeBinPath environment }" }
 '';
 		};
 	};
